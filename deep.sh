@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 # 当前脚本版本
-SCRIPT_VERSION="2.0"
+SCRIPT_VERSION="1.0"
 
 # 检查依赖
 if ! command -v dialog &> /dev/null; then
@@ -15,6 +15,26 @@ if ! command -v curl &> /dev/null; then
     pkg install curl -y >/dev/null 2>&1 || { echo "❌ curl安装失败！手动执行: pkg install curl"; exit 1; }
 fi
 
+# 配置文件路径
+CONFIG_FILE="$HOME/.ollama_manager.cfg"
+
+# 初始化配置
+init_config() {
+    if [ ! -f "$CONFIG_FILE" ]; then
+        cat > "$CONFIG_FILE" <<EOF
+AUTO_UPDATE=0
+EOF
+    fi
+    source "$CONFIG_FILE"
+}
+
+# 保存配置
+save_config() {
+    cat > "$CONFIG_FILE" <<EOF
+AUTO_UPDATE=$AUTO_UPDATE
+EOF
+}
+
 # 颜文字数组
 declare -A KAOMOJI=(
     ["happy"]="ヽ(•‿•)ノ"
@@ -22,7 +42,7 @@ declare -A KAOMOJI=(
     ["think"]='(。-`ω´-)'
     ["cool"]="(⌐■_■)"
     ["shock"]="(⊙_☉)"
-    ["run"]="ε=ε=ε=┏(゜゜ロ゜゜;)┛"
+    ["run"]="ε=ε=ε=┏(゜ロ゜;)┛"
     ["done"]="✅"
     ["fail"]="❌"
     ["download"]="📥"
@@ -30,29 +50,47 @@ declare -A KAOMOJI=(
     ["fire"]="🔥"
     ["update"]="🔄"
     ["mirror"]="🪞"
+    ["settings"]="⚙️"
+    ["about"]="ℹ️"
 )
 
 # 获取已安装模型
 get_models() {
-    ollama list | awk 'NR>1 {print $1}'
+    if command -v ollama &> /dev/null; then
+        ollama list | awk 'NR>1 {print $1}'
+    else
+        echo ""
+    fi
 }
 
 # 显示欢迎标题
 show_welcome() {
     clear
     echo -e "\033[1;36m
-    ___       __    _______    ________
-   /   | ____/ /   / ____/ |  / / ____/
-  / /极 |/ __ 速 /   / __/  | | / / __/   
- / 下 载 / /_/ /   / /___  | |/ / /___   
-/_/ 体 验__,_/   /_____/  |___/_____/   
+
+
+|____    _____  .           _____  |     |
+|    |  |          |\   |  |       |     |
+|    |   -----  |  | \  |   ------ |_____|
+|    |       |  |  |  \ |         ||     |
+|~~~~    -----  |  |   \|   －－－  |     |
+ D        S     I    N         S      H
+
+         DeepSeek IN SHell
+
+           Starting up...
+
+      powered by ollama Linuxshell
 \033[0m"
-    echo -e "       ${KAOMOJI[model]} \033[1;33mOllama 终端管理器 v$SCRIPT_VERSION ${KAOMOJI[fire]}\033[0m"
+    echo -e "       ${KAOMOJI[model]} \033[1;33mDSINSH 终端管理器 v$SCRIPT_VERSION ${KAOMOJI[fire]}\033[0m"
     sleep 1
 }
 
 # 检查更新
 check_updates() {
+    # 显示提示信息
+    dialog --infobox "检查更新中，可能较慢..." 5 40
+    
     # 检查网络连接
     if ! ping -c 1 github.com >/dev/null 2>&1; then
         dialog --msgbox "${KAOMOJI[fail]} 无法连接到互联网！跳过更新检查" 6 50
@@ -74,23 +112,30 @@ check_updates() {
             # 用户选择更新
             update_script
         fi
+    else
+        dialog --msgbox "${KAOMOJI[done]} 当前已是最新版本！" 6 40
     fi
 }
 
 # 更新脚本
 update_script() {
-    # 下载更新脚本
-    dialog --infobox "${KAOMOJI[download]} 下载更新中..." 5 40
+    # 获取当前脚本目录
+    CURRENT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
     
     # 创建临时更新脚本路径
-    update_script_path="/sdcard/deep_update_$$.sh"
+    update_script_path="$CURRENT_DIR/deep_update_$$.sh"
+    final_script_path="$CURRENT_DIR/deep.sh"
+    st_script_path="$CURRENT_DIR/st.sh"
     
-    # 定义多个下载源（主源+镜像）
+    # 定义多个下载源
     sources=(
         "https://raw.githubusercontent.com/sttgf/Android-t-in-phone/main/deep.sh"
         "https://ghproxy.com/https://raw.githubusercontent.com/sttgf/Android-t-in-phone/main/deep.sh"
         "https://cdn.jsdelivr.net/gh/sttgf/Android-t-in-phone/deep.sh"
         "https://raw.fastgit.org/sttgf/Android-t-in-phone/main/deep.sh"
+        "https://gcore.jsdelivr.net/gh/sttgf/Android-t-in-phone/deep.sh"
+        "https://cdn.staticaly.com/gh/sttgf/Android-t-in-phone/main/deep.sh"
+        "https://raw.gitmirror.com/sttgf/Android-t-in-phone/main/deep.sh"
     )
     
     success=0
@@ -112,23 +157,112 @@ update_script() {
     # 设置执行权限
     chmod +x "$update_script_path"
     
-    # 执行更新
-    dialog --infobox "${KAOMOJI[update]} 正在应用更新..." 5 40
-    sleep 1
+    # 重命名更新文件
+    mv "$update_script_path" "$final_script_path"
+    
+    # 创建启动脚本
+    echo "#!/bin/bash" > "$st_script_path"
+    echo "bash \"$final_script_path\"" >> "$st_script_path"
+    chmod +x "$st_script_path"
     
     # 执行新脚本
-    exec "$update_script_path"
+    dialog --infobox "${KAOMOJI[update]} 更新完成！启动新版本..." 5 50
+    sleep 2
+    exec "$st_script_path"
+}
+
+# 精美关于页面
+about_animation() {
+    clear
+    
+    # 显示动态标题
+    echo -e "\033[1;36m"
+    echo "    "
+    echo "    "
+    echo "    DS in sh"
+    echo "    "
+    echo "    "
+    sleep 0.5
+    
+    # 作者信息
+    clear
+    echo -e "\033[1;36m"
+    echo "    "
+    echo "    "
+    echo "    DS in sh"
+    echo "    "
+    echo "    作者:LHRstudios"
+    echo "    "
+    sleep 0.5
+    
+    # 版本信息
+    clear
+    echo -e "\033[1;36m"
+    echo "    "
+    echo "    "
+    echo "    DS in sh"
+    echo "    "
+    echo "    作者:LHRstudios"
+    echo "    版本: v$SCRIPT_VERSION"
+    echo "    "
+    echo "    "
+    sleep 0.5
+    
+    # 致谢信息
+    clear
+    echo -e "\033[1;36m"
+    echo "    "
+    echo "    "
+    echo "    DS in sh"
+    echo "    "
+    echo "    作者:LHRstudios"
+    echo "    版本: v$SCRIPT_VERSION"
+    echo "    "
+    echo "    感谢您的使用!"
+    echo "    ${KAOMOJI[happy]}"
+    echo "    " 
+    echo "    "
+    
+    # 等待用户按键
+    echo -e "\033[0m\n\033[1;32m      [按任意键返回]\033[0m"
+    read -n1 -s
+}
+
+# 设置菜单
+settings_menu() {
+    while true; do
+        choice=$(dialog --title " ${KAOMOJI[settings]} 设置" \
+            --menu "选择操作 ${KAOMOJI[think]}" 12 50 4 \
+            1 "自动检查更新: $([ $AUTO_UPDATE -eq 1 ] && echo "✅" || echo "❌")" \
+            2 "${KAOMOJI[about]} 关于" \
+            0 "返回" \
+            3>&1 1>&2 2>&3)
+        
+        [ $? -ne 0 ] && return
+        
+        case $choice in
+            1) 
+                AUTO_UPDATE=$((1 - AUTO_UPDATE))
+                save_config
+                dialog --msgbox "自动检查更新已 ${KAOMOJI[done]} $([ $AUTO_UPDATE -eq 1 ] && echo "开启" || echo "关闭")" 6 40
+                ;;
+            2) about_animation ;;
+            0) return ;;
+        esac
+    done
 }
 
 # 主菜单
 main_menu() {
     while true; do
-        choice=$(dialog --title " ${KAOMOJI[model]} Ollama 管理器" \
-            --menu "选择操作 ${KAOMOJI[think]}" 16 50 6 \
+        choice=$(dialog --title " ${KAOMOJI[model]} DS in sh" \
+            --menu "选择操作 ${KAOMOJI[think]}" 17 50 7 \
             1 "${KAOMOJI[model]} 运行模型" \
             2 "${KAOMOJI[download]} 安装模型" \
             3 "🌐 开启Web服务" \
-            4 "🗑️ 卸载模型" \
+            4 "🗑 卸载模型" \
+            5 "${KAOMOJI[update]} 检查更新" \
+            6 "${KAOMOJI[settings]} 设置" \
             0 "🚪 退出" \
             3>&1 1>&2 2>&3)
         
@@ -139,6 +273,8 @@ main_menu() {
             2) install_model ;;
             3) start_web_service ;;
             4) uninstall_model ;;
+            5) check_updates ;;
+            6) settings_menu ;;
             0) exit_msg ;;
         esac
     done
@@ -147,14 +283,14 @@ main_menu() {
 # 运行模型
 run_model() {
     models=($(get_models))
-    [ ${#models[@]} -eq 0 ] && {
+    if [ ${#models[@]} -eq 0 ]; then
         dialog --msgbox "${KAOMOJI[fail]} 没有安装模型！请先安装" 6 40
         return
-    }
+    fi
     
     options=()
     for i in "${!models[@]}"; do
-        options+=("极速模型 $((i+1))" "${models[$i]} ${KAOMOJI[model]}")
+        options+=("$((i+1))" "${models[$i]} ${KAOMOJI[model]}")
     done
     
     choice=$(dialog --menu "选择模型 ${KAOMOJI[think]}" 15 40 10 "${options[@]}" 3>&1 1>&2 2>&3)
@@ -174,7 +310,7 @@ run_model() {
 # 安装模型
 install_model() {
     model_name=$(dialog --inputbox "${KAOMOJI[download]} 输入模型名称 (如: llama3)" 10 40 3>&1 1>&2 2>&3)
-    [ -极速安装 -z "$model_name" ] && return
+    [ -z "$model_name" ] && return
     
     # 创建日志文件
     log_file="/tmp/ollama_install_$$.log"
@@ -211,7 +347,7 @@ install_model() {
             sleep 2
             exit 1
         fi
-    ) | dialog --title " ${KAOMOJI[download]} 模型安装" --gauge "🔄🔄 正在下载 $model_name..." 10 70
+    ) | dialog --title " ${KAOMOJI[download]} 模型安装" --gauge "🔄 正在下载 $model_name..." 10 70
     
     # 检查安装结果
     if grep -q "success" "$log_file" || ollama list | grep -q "$model_name"; then
@@ -235,10 +371,10 @@ install_model() {
 # 卸载模型
 uninstall_model() {
     models=($(get_models))
-    [ ${#models[@]} -eq 0 ] && {
+    if [ ${#models[@]} -eq 0 ]; then
         dialog --msgbox "${KAOMOJI[fail]} 没有可卸载的模型！" 6 40
         return
-    }
+    fi
     
     options=()
     for i in "${!models[@]}"; do
@@ -246,7 +382,7 @@ uninstall_model() {
     done
     options+=("C" "📛 取消操作")
 
-    choice=$(dialog --menu "🗑️ 选择要卸载的模型" 15 50 10 "${options[@]}" 3>&1 1>&2 2>&3)
+    choice=$(dialog --menu "🗑 选择要卸载的模型" 15 50 10 "${options[@]}" 3>&1 1>&2 2>&3)
     [[ "$choice" == "C" || -z "$choice" ]] && return
 
     model_name="${models[$((choice-1))]}"
@@ -282,11 +418,16 @@ exit_msg() {
     exit 0
 }
 
+# 初始化配置
+init_config
+
 # 启动欢迎界面
 show_welcome
 
-# 检查更新
-check_updates
+# 自动检查更新（如果启用）
+if [ $AUTO_UPDATE -eq 1 ]; then
+    check_updates
+fi
 
 # 进入主菜单
 main_menu
