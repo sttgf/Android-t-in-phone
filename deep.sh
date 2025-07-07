@@ -6,13 +6,13 @@ SCRIPT_VERSION="1.0"
 # 检查依赖
 if ! command -v dialog &> /dev/null; then
     echo "✨ 安装dialog中..."
-    pkg install dialog -y >/dev/null 2>&1 || { echo "❌❌❌❌ 安装失败！手动执行: pkg install dialog"; exit 1; }
+    pkg install dialog -y >/dev/null 2>&1 || { echo "❌ 安装失败！手动执行: pkg install dialog"; exit 1; }
 fi
 
 # 检查curl依赖
 if ! command -v curl &> /dev/null; then
     echo "✨ 安装curl中..."
-    pkg install curl -y >/dev/null 2>&1 || { echo "❌❌❌❌ curl安装失败！手动执行: pkg install curl"; exit 1; }
+    pkg install curl -y >/dev/null 2>&1 || { echo "❌ curl安装失败！手动执行: pkg install curl"; exit 1; }
 fi
 
 # 颜文字数组
@@ -22,13 +22,14 @@ declare -A KAOMOJI=(
     ["think"]='(。-`ω´-)'
     ["cool"]="(⌐■_■)"
     ["shock"]="(⊙_☉)"
-    ["run"]="ε=ε=ε=┏(゜ロ゜;)┛"
+    ["run"]="ε=ε=ε=┏(゜゜ロ゜゜;)┛"
     ["done"]="✅"
     ["fail"]="❌"
     ["download"]="📥"
     ["model"]="🧠"
     ["fire"]="🔥"
     ["update"]="🔄"
+    ["mirror"]="🪞"
 )
 
 # 获取已安装模型
@@ -42,9 +43,9 @@ show_welcome() {
     echo -e "\033[1;36m
     ___       __    _______    ________
    /   | ____/ /   / ____/ |  / / ____/
-  / /| |/ __  /   / __/  | | / / __/   
- / ___ / /_/ /   / /___  | |/ / /___   
-/_/  |_\__,_/   /_____/  |___/_____/   
+  / /极 |/ __ 速 /   / __/  | | / / __/   
+ / 下 载 / /_/ /   / /___  | |/ / /___   
+/_/ 体 验__,_/   /_____/  |___/_____/   
 \033[0m"
     echo -e "       ${KAOMOJI[model]} \033[1;33mOllama 终端管理器 v$SCRIPT_VERSION ${KAOMOJI[fire]}\033[0m"
     sleep 1
@@ -84,8 +85,27 @@ update_script() {
     # 创建临时更新脚本路径
     update_script_path="/sdcard/deep_update_$$.sh"
     
-    if ! curl -s -o "$update_script_path" "https://raw.githubusercontent.com/sttgf/Android-t-in-phone/main/deep.sh"; then
-        dialog --msgbox "${KAOMOJI[fail]} 下载更新失败！" 5 40
+    # 定义多个下载源（主源+镜像）
+    sources=(
+        "https://raw.githubusercontent.com/sttgf/Android-t-in-phone/main/deep.sh"
+        "https://ghproxy.com/https://raw.githubusercontent.com/sttgf/Android-t-in-phone/main/deep.sh"
+        "https://cdn.jsdelivr.net/gh/sttgf/Android-t-in-phone/deep.sh"
+        "https://raw.fastgit.org/sttgf/Android-t-in-phone/main/deep.sh"
+    )
+    
+    success=0
+    
+    for source in "${sources[@]}"; do
+        dialog --infobox "${KAOMOJI[mirror]} 尝试源: ${source:0:40}..." 5 60
+        if curl -s -o "$update_script_path" "$source"; then
+            success=1
+            break
+        fi
+        sleep 1
+    done
+    
+    if [ $success -eq 0 ]; then
+        dialog --msgbox "${KAOMOJI[fail]} 所有下载源均失败！\n\n手动更新方案:\n1. 浏览器访问: https://github.com/sttgf/Android-t-in-phone\n2. 下载 deep.sh\n3. 替换当前脚本" 12 60
         return
     fi
     
@@ -134,7 +154,7 @@ run_model() {
     
     options=()
     for i in "${!models[@]}"; do
-        options+=("$((i+1))" "${models[$i]} ${KAOMOJI[model]}")
+        options+=("极速模型 $((i+1))" "${models[$i]} ${KAOMOJI[model]}")
     done
     
     choice=$(dialog --menu "选择模型 ${KAOMOJI[think]}" 15 40 10 "${options[@]}" 3>&1 1>&2 2>&3)
@@ -154,7 +174,7 @@ run_model() {
 # 安装模型
 install_model() {
     model_name=$(dialog --inputbox "${KAOMOJI[download]} 输入模型名称 (如: llama3)" 10 40 3>&1 1>&2 2>&3)
-    [ -z "$model_name" ] && return
+    [ -极速安装 -z "$model_name" ] && return
     
     # 创建日志文件
     log_file="/tmp/ollama_install_$$.log"
@@ -191,7 +211,7 @@ install_model() {
             sleep 2
             exit 1
         fi
-    ) | dialog --title " ${KAOMOJI[download]} 模型安装" --gauge "🔄 正在下载 $model_name..." 10 70
+    ) | dialog --title " ${KAOMOJI[download]} 模型安装" --gauge "🔄🔄 正在下载 $model_name..." 10 70
     
     # 检查安装结果
     if grep -q "success" "$log_file" || ollama list | grep -q "$model_name"; then
@@ -245,7 +265,7 @@ uninstall_model() {
 
 # 开启网页服务
 start_web_service() {
-    dialog --msgbox "🌐🌐🌐🌐 Ollama服务已启动\n访问: http://localhost:11434\n${KAOMOJI[happy]}" 8 50
+    dialog --msgbox "🌐 Ollama服务已启动\n访问: http://localhost:11434\n${KAOMOJI[happy]}" 8 50
     {
         echo "启动服务..."
         ollama serve
