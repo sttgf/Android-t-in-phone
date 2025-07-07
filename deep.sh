@@ -1,7 +1,7 @@
 #!/data/data/com.termux/files/usr/bin/bash
 
 # 当前脚本版本
-SCRIPT_VERSION="1.0"
+SCRIPT_VERSION="2.0"
 
 # 检查依赖
 if ! command -v dialog &> /dev/null; then
